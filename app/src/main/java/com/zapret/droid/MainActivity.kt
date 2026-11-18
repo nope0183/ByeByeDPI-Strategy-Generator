@@ -1,6 +1,9 @@
 package com.zapret.droid
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -171,6 +174,23 @@ private fun GeneratorApp() {
                                 enabled = candidates.isNotEmpty(),
                                 modifier = Modifier.weight(1f)
                             ) { Text("Экспорт .txt") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                        as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "ByeDPI candidates",
+                                            candidates.joinToString("\n") { it.arguments }
+                                        )
+                                    )
+                                    notice = "Скопировано кандидатов: ${candidates.size}"
+                                },
+                                enabled = candidates.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Копировать всех") }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
