@@ -34,11 +34,44 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.zapret.droid.strategies.ByedpiCandidate
 import com.zapret.droid.strategies.ByedpiConfigGenerator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { GeneratorApp() }
+    }
+}
+
+internal fun formatYoutubeResponse(code: Int, elapsedMs: Long): String = when {
+    code in 200..399 -> "доступен (HTTP $code, ${elapsedMs} мс)"
+    code == 403 || code == 429 -> "ответ сайта получен (HTTP $code, ${elapsedMs} мс)"
+    else -> "недоступен (HTTP $code, ${elapsedMs} мс)"
+}
+
+private suspend fun checkYoutube(): String = withContext(Dispatchers.IO) {
+    val startedAt = System.nanoTime()
+    var connection: HttpURLConnection? = null
+    try {
+        connection = (URL("https://www.youtube.com").openConnection() as HttpURLConnection).apply {
+            requestMethod = "HEAD"
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            instanceFollowRedirects = true
+        }
+        val code = connection.responseCode
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+        formatYoutubeResponse(code, elapsedMs)
+    } catch (error: Exception) {
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+        "ошибка соединения (${elapsedMs} мс): ${error.message ?: error.javaClass.simpleName}"
+    } finally {
+        connection?.disconnect()
     }
 }
 
@@ -51,6 +84,9 @@ private fun GeneratorApp() {
     var batchCount by remember { mutableStateOf(1) }
     var serial by remember { mutableStateOf(0) }
     var notice by remember { mutableStateOf("") }
+    var youtubeCheck by remember { mutableStateOf("Не проверено") }
+    var youtubeChecking by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain")
@@ -136,6 +172,24 @@ private fun GeneratorApp() {
                                 modifier = Modifier.weight(1f)
                             ) { Text("Экспорт .txt") }
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    youtubeChecking = true
+                                    youtubeCheck = "Проверка YouTube..."
+                                    coroutineScope.launch {
+                                        youtubeCheck = checkYoutube()
+                                        youtubeChecking = false
+                                    }
+                                },
+                                enabled = !youtubeChecking,
+                                modifier = Modifier.weight(1f)
+                            ) { Text(if (youtubeChecking) "Проверка..." else "Проверить YouTube") }
+                        }
+                        Text(
+                            text = "YouTube: $youtubeCheck",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
 
